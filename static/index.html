@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#1877f2">
+<title>Descargar videos</title>
+<style>
+  body{font-family:sans-serif;margin:0;padding:24px;text-align:center;background:#fff;color:#111}
+  h1{font-size:28px}
+  input{width:100%;box-sizing:border-box;font-size:20px;padding:16px;border:2px solid #999;border-radius:12px}
+  button{width:100%;font-size:26px;padding:22px;margin-top:16px;border:0;border-radius:16px;background:#1877f2;color:#fff}
+  #msg{font-size:22px;margin-top:24px;min-height:60px}
+</style>
+</head>
+<body>
+<h1>Descargar video</h1>
+<input id="url" placeholder="Pega aquí el enlace" inputmode="url">
+<button id="go">DESCARGAR</button>
+<div id="msg"></div>
+<script>
+const $ = id => document.getElementById(id);
+const msg = t => $("msg").textContent = t;
+
+function getKey(){
+  let k = localStorage.getItem("key");
+  if(!k){ k = prompt("Clave de acceso:") || ""; localStorage.setItem("key", k); }
+  return k;
+}
+
+async function descargar(){
+  const url = $("url").value.trim();
+  if(!url) return msg("Pega primero un enlace");
+  msg("Descargando… espera un momento ⏳");
+  $("go").disabled = true;
+  try{
+    const r = await fetch("/api/download", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","X-Key":getKey()},
+      body: JSON.stringify({url})
+    });
+    if(r.status === 401){ localStorage.removeItem("key"); throw new Error("Clave incorrecta"); }
+    if(!r.ok) throw new Error((await r.json()).error);
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(await r.blob());
+    a.download = "video-" + Date.now() + ".mp4";
+    a.click();
+    msg("✅ ¡Listo! Búscalo en Descargas");
+  }catch(e){ msg("❌ " + e.message); }
+  $("go").disabled = false;
+}
+
+// Si llega desde "Compartir" de Facebook, extrae el enlace y descarga solo
+const p = new URLSearchParams(location.search);
+const found = ((p.get("url") || "") + " " + (p.get("text") || "")).match(/https?:\/\/\S+/);
+if(found){ $("url").value = found[0]; history.replaceState({}, "", "/"); descargar(); }
+
+$("go").onclick = descargar;
+if("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js");
+</script>
+</body>
+</html>
